@@ -3,67 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Flickr Signage Slideshow — Last 7 Days</title>
-  <meta name="description" content="Auto-updating Flickr slideshow for digital signage. Shows multiple photos per slide, actual size, techy animations." />
+  <title>Flickr Signage Slideshow — Clean</title>
   <style>
     :root {
       --bg: #000;
-      --fg: #eafcff;
-      --accent: #00e5ff;
-      --accent-2: #7cf9ff;
       --gap: 16px;
       --slide-duration: 12s;
       --row-target: 320px;
     }
     * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--fg);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      overflow: hidden;
-    }
-
-    .bg-tech {
-      position: fixed;
-      inset: 0;
-      background:
-        radial-gradient(circle at 50% 0%, rgba(0,229,255,0.08), transparent 40%),
-        radial-gradient(circle at 0% 100%, rgba(0,229,255,0.06), transparent 40%),
-        linear-gradient(90deg, rgba(0,229,255,0.05) 1px, transparent 1px) 0 0 / 40px 40px,
-        linear-gradient(0deg, rgba(0,229,255,0.05) 1px, transparent 1px) 0 0 / 40px 40px,
-        radial-gradient(circle at 100% 50%, rgba(124,249,255,0.06), transparent 35%);
-      pointer-events: none;
-      filter: saturate(120%);
-      animation: bgFloat 18s ease-in-out infinite alternate;
-    }
-    @keyframes bgFloat {
-      0% { transform: translateY(-1%) scale(1.02); opacity: 0.9; }
-      100% { transform: translateY(1%) scale(1.05); opacity: 1; }
-    }
-
-    .scanlines {
-      position: fixed;
-      inset: 0;
-      background: repeating-linear-gradient(
-        to bottom,
-        rgba(0,0,0,0.12),
-        rgba(0,0,0,0.12) 1px,
-        transparent 2px,
-        transparent 4px
-      );
-      mix-blend-mode: multiply;
-      pointer-events: none;
-      opacity: 0.35;
-      animation: flicker 6s linear infinite;
-    }
-    @keyframes flicker {
-      0%, 100% { opacity: 0.35; }
-      40% { opacity: 0.28; }
-      50% { opacity: 0.4; }
-      60% { opacity: 0.3; }
-    }
+    html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; }
 
     .stage {
       position: fixed;
@@ -80,12 +29,10 @@
       flex-direction: column;
       gap: var(--gap);
       opacity: 0;
-      transform: perspective(1200px) rotateY(-8deg) scale(0.985) translateY(10px);
-      transition: opacity 900ms ease, transform 900ms ease;
+      transition: opacity 900ms ease;
     }
     .slide.active {
       opacity: 1;
-      transform: perspective(1200px) rotateY(0deg) scale(1) translateY(0);
     }
 
     .row {
@@ -97,43 +44,26 @@
 
     .tile {
       position: relative;
-      border-radius: 16px;
+      border-radius: 12px;
       overflow: hidden;
-      background: #0a0f12;
-      border: 1px solid rgba(124,249,255,0.22);
-      box-shadow:
-        0 0 0 1px rgba(124,249,255,0.22) inset,
-        0 8px 30px rgba(0,229,255,0.12),
-        0 0 18px rgba(0,229,255,0.18);
-      isolation: isolate;
+      background: #000;
     }
     .tile img {
       display: block;
       width: 100%;
       height: auto;
     }
-    .tile::after {
-      content: "";
-      position: absolute;
-      inset: -120% -120%;
-      background: conic-gradient(from 0deg, rgba(124,249,255,0), rgba(124,249,255,0.15), rgba(124,249,255,0));
-      animation: sweep 8s linear infinite;
-      mix-blend-mode: overlay;
-      pointer-events: none;
-    }
-    @keyframes sweep { to { transform: rotate(360deg); } }
-
     .tile.reveal {
       opacity: 0;
       transform: translateY(24px) scale(0.98);
       animation: popin 700ms ease forwards;
     }
-    @keyframes popin { to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes popin {
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
   </style>
 </head>
 <body>
-  <div class="bg-tech"></div>
-  <div class="scanlines"></div>
   <div class="stage" id="stage"></div>
 
   <script>
@@ -152,7 +82,6 @@
     const sevenDaysAgo = () => Math.floor(Date.now() / 1000) - 7 * daySec;
 
     const stage = document.getElementById('stage');
-
     let slides = [];
     let slideIndex = 0;
     let slideTimer = null;
@@ -194,7 +123,7 @@
       return url ? { url, w: Number(w), h: Number(h), title: p.title || '' } : null;
     }
 
-    function buildJustifiedRows(items, containerWidth, targetRowHeight, gap, maxScaleUp=1.0) {
+    function buildJustifiedRows(items, containerWidth, targetRowHeight, gap) {
       const rows = [];
       let row = [];
       let rowAspectSum = 0;
@@ -282,7 +211,7 @@
 
       const containerWidth = stage.clientWidth - 48;
       const containerHeight = stage.clientHeight - 48;
-      const rows = buildJustifiedRows(photos, containerWidth, CONFIG.targetRowHeight, CONFIG.gap, 1.0);
+      const rows = buildJustifiedRows(photos, containerWidth, CONFIG.targetRowHeight, CONFIG.gap);
       const slidesRows = paginateRowsToSlides(rows, containerHeight, CONFIG.gap);
 
       slides = slidesRows;
