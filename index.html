@@ -1,240 +1,104 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Flickr Signage Slideshow — Clean</title>
+  <meta charset="UTF-8">
+  <title>Flickr Moving Rows Slideshow</title>
   <style>
-    :root {
-      --bg: #000;
-      --gap: 16px;
-      --slide-duration: 12s;
-      --row-target: 320px;
-    }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; }
-
-    .stage {
-      position: fixed;
-      inset: 0;
-      padding: 24px;
-      display: grid;
-      place-items: center;
-    }
-    .slide {
-      position: absolute;
-      inset: 24px;
+    body {
+      margin: 0;
+      background: black;
       overflow: hidden;
+    }
+    .slideshow {
       display: flex;
       flex-direction: column;
-      gap: var(--gap);
-      opacity: 0;
-      transition: opacity 900ms ease;
+      height: 100vh;
+      width: 100vw;
     }
-    .slide.active {
-      opacity: 1;
-    }
-
     .row {
-      width: 100%;
       display: flex;
-      gap: var(--gap);
-      justify-content: center;
-    }
-
-    .tile {
-      position: relative;
-      border-radius: 12px;
+      white-space: nowrap;
       overflow: hidden;
-      background: #000;
+      flex: 1; /* evenly divide space */
     }
-    .tile img {
-      display: block;
-      width: 100%;
-      height: auto;
-    }
-    .tile.reveal {
-      opacity: 0;
-      transform: translateY(24px) scale(0.98);
-      animation: popin 700ms ease forwards;
-    }
-    @keyframes popin {
-      to { opacity: 1; transform: translateY(0) scale(1); }
+    .row img {
+      height: 100%;
+      margin-right: 10px;
+      border-radius: 8px;
+      object-fit: cover;
     }
   </style>
 </head>
 <body>
-  <div class="stage" id="stage"></div>
+  <div class="slideshow" id="slideshow"></div>
 
   <script>
-    const CONFIG = {
-      apiKey: "4855498d62dbadaf2bd11df6fcdb9f08",
-      username: "sulamitachurchpdx",
-      targetRowHeight: 320,
-      gap: 16,
-      slideDurationMs: 12000,
-      refreshMs: 300000,
-      tags: "",
-      shuffle: false,
-    };
+    const slideshow = document.getElementById("slideshow");
+    const API_KEY = "4855498d62dbadaf2bd11df6fcdb9f08";
+    const USERNAME = "sulamitachurchpdx";
+    const ROW_COUNT = 6; // number of moving rows
 
-    const daySec = 24 * 60 * 60;
-    const sevenDaysAgo = () => Math.floor(Date.now() / 1000) - 7 * daySec;
-
-    const stage = document.getElementById('stage');
-    let slides = [];
-    let slideIndex = 0;
-    let slideTimer = null;
-    let refreshTimer = null;
-
-    async function flickrFindNSID(apiKey, username) {
-      const url = new URL('https://www.flickr.com/services/rest/');
-      url.searchParams.set('method', 'flickr.people.findByUsername');
-      url.searchParams.set('api_key', apiKey);
-      url.searchParams.set('username', username);
-      url.searchParams.set('format', 'json');
-      url.searchParams.set('nojsoncallback', '1');
-      const r = await fetch(url);
-      const data = await r.json();
+    // Get Flickr user_id from username
+    async function getUserId(username) {
+      const url = `https://www.flickr.com/services/rest/?method=flickr.people.findByUsername&api_key=${API_KEY}&username=${username}&format=json&nojsoncallback=1`;
+      const res = await fetch(url);
+      const data = await res.json();
       return data.user.nsid;
     }
 
-    async function flickrFetchRecent(apiKey, userId, tags) {
-      const url = new URL('https://www.flickr.com/services/rest/');
-      url.searchParams.set('method', 'flickr.photos.search');
-      url.searchParams.set('api_key', apiKey);
-      url.searchParams.set('user_id', userId);
-      url.searchParams.set('min_upload_date', String(sevenDaysAgo()));
-      url.searchParams.set('extras', 'url_m,url_l,url_o,width_m,height_m,width_l,height_l,o_dims,date_upload');
-      url.searchParams.set('per_page', '250');
-      url.searchParams.set('page', '1');
-      url.searchParams.set('format', 'json');
-      url.searchParams.set('nojsoncallback', '1');
-      if (tags) url.searchParams.set('tags', tags);
-      const r = await fetch(url);
-      const data = await r.json();
-      return data.photos.photo;
+    // Fetch photos from Flickr
+    async function fetchPhotos(userId) {
+      const url = `https://www.flickr.com/services/rest/?method=flickr.people.getPublicPhotos&api_key=${API_KEY}&user_id=${userId}&per_page=200&format=json&nojsoncallback=1`;
+      const res = await fetch(url);
+      const data = await res.json();
+      return data.photos.photo.map(p =>
+        `https://live.staticflickr.com/${p.server}/${p.id}_${p.secret}_b.jpg`
+      );
     }
 
-    function bestImage(p) {
-      let url = p.url_l || p.url_m || p.url_o || null;
-      let w = p.width_l || p.width_m || p.width_o || null;
-      let h = p.height_l || p.height_m || p.height_o || null;
-      return url ? { url, w: Number(w), h: Number(h), title: p.title || '' } : null;
-    }
+    // Build rows
+    function buildRows(images) {
+      for (let i = 0; i < ROW_COUNT; i++) {
+        const row = document.createElement("div");
+        row.className = "row";
+        row.dataset.speed = (i % 2 === 0 ? 1 : -1); // alternate direction
 
-    function buildJustifiedRows(items, containerWidth, targetRowHeight, gap) {
-      const rows = [];
-      let row = [];
-      let rowAspectSum = 0;
-      for (const it of items) {
-        const ar = it.w && it.h ? it.w / it.h : 1.5;
-        row.push({...it, ar});
-        rowAspectSum += ar;
-        const gaps = gap * (row.length - 1);
-        const rowWidthAtTarget = rowAspectSum * targetRowHeight + gaps;
-        if (rowWidthAtTarget >= containerWidth || row.length >= 6) {
-          let rowH = (containerWidth - gaps) / rowAspectSum;
-          rowH = Math.min(rowH, targetRowHeight);
-          rows.push({h: Math.max(80, rowH), items: row});
-          row = [];
-          rowAspectSum = 0;
-        }
-      }
-      if (row.length) {
-        rows.push({h: Math.min(targetRowHeight, Math.max(80, (containerWidth - gap * (row.length - 1)) / (rowAspectSum || 1))), items: row});
-      }
-      return rows;
-    }
-
-    function paginateRowsToSlides(rows, containerHeight, gap) {
-      const slides = [];
-      let current = [];
-      let used = 0;
-      for (const r of rows) {
-        const rowHeightWithGap = (current.length ? gap : 0) + r.h;
-        if (used + rowHeightWithGap > containerHeight && current.length) {
-          slides.push(current);
-          current = [r];
-          used = r.h;
-        } else {
-          current.push(r);
-          used += rowHeightWithGap;
-        }
-      }
-      if (current.length) slides.push(current);
-      return slides;
-    }
-
-    function renderSlides(slides) {
-      stage.innerHTML = '';
-      const gap = CONFIG.gap;
-      slides.forEach((rows) => {
-        const slide = document.createElement('div');
-        slide.className = 'slide';
-        slide.style.setProperty('--gap', gap + 'px');
-        rows.forEach((r, rowIdx) => {
-          const rowEl = document.createElement('div');
-          rowEl.className = 'row';
-          rowEl.style.marginTop = rowIdx === 0 ? '0' : gap + 'px';
-          r.items.forEach((it, j) => {
-            const tile = document.createElement('div');
-            tile.className = 'tile reveal';
-            tile.style.height = r.h + 'px';
-            const width = it.ar * r.h;
-            tile.style.width = width + 'px';
-            tile.style.animationDelay = (j * 90) + 'ms';
-            const img = document.createElement('img');
-            img.src = it.url;
-            img.alt = it.title || 'Flickr photo';
-            tile.appendChild(img);
-            rowEl.appendChild(tile);
+        // duplicate images so scrolling loops seamlessly
+        for (let k = 0; k < 2; k++) {
+          images.forEach(url => {
+            const img = document.createElement("img");
+            img.src = url;
+            row.appendChild(img);
           });
-          slide.appendChild(rowEl);
-        });
-        stage.appendChild(slide);
+        }
+
+        slideshow.appendChild(row);
+      }
+    }
+
+    // Animate scrolling
+    function animate() {
+      const rows = document.querySelectorAll(".row");
+      const speed = 0.5; // movement speed
+      rows.forEach(row => {
+        let dir = parseFloat(row.dataset.speed);
+        row.scrollLeft += speed * dir;
+        if (row.scrollLeft >= row.scrollWidth - row.clientWidth) {
+          row.scrollLeft = 0;
+        } else if (row.scrollLeft <= 0) {
+          row.scrollLeft = row.scrollWidth;
+        }
       });
+      requestAnimationFrame(animate);
     }
 
-    function showSlide(i) {
-      const all = Array.from(stage.children);
-      all.forEach((el, idx) => {
-        el.classList.toggle('active', idx === i);
-      });
-    }
-
-    async function loadAndRender() {
-      const userId = await flickrFindNSID(CONFIG.apiKey, CONFIG.username);
-      let photos = await flickrFetchRecent(CONFIG.apiKey, userId, CONFIG.tags);
-      photos.sort((a,b) => Number(b.dateupload || 0) - Number(a.dateupload || 0));
-      photos = photos.map(bestImage).filter(Boolean);
-
-      const containerWidth = stage.clientWidth - 48;
-      const containerHeight = stage.clientHeight - 48;
-      const rows = buildJustifiedRows(photos, containerWidth, CONFIG.targetRowHeight, CONFIG.gap);
-      const slidesRows = paginateRowsToSlides(rows, containerHeight, CONFIG.gap);
-
-      slides = slidesRows;
-      renderSlides(slides);
-      slideIndex = 0;
-      showSlide(slideIndex);
-
-      if (slideTimer) clearInterval(slideTimer);
-      slideTimer = setInterval(() => {
-        slideIndex = (slideIndex + 1) % slides.length;
-        showSlide(slideIndex);
-      }, CONFIG.slideDurationMs);
-
-      if (refreshTimer) clearInterval(refreshTimer);
-      refreshTimer = setInterval(() => loadAndRender().catch(console.error), CONFIG.refreshMs);
-    }
-
-    window.addEventListener('resize', () => {
-      if (!stage.children.length) return;
-      loadAndRender().catch(console.error);
-    });
-
-    loadAndRender().catch(console.error);
+    // Init
+    (async function init() {
+      const userId = await getUserId(USERNAME);
+      const photos = await fetchPhotos(userId);
+      buildRows(photos);
+      animate();
+    })();
   </script>
 </body>
 </html>
