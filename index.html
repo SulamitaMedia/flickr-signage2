@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Flickr Signage Slideshow — Clean</title>
+  <title>Flickr Signage Slideshow — Fullscreen</title>
   <style>
     :root {
       --bg: #000;
@@ -17,19 +17,20 @@
     .stage {
       position: fixed;
       inset: 0;
-      padding: 24px;
       display: grid;
       place-items: center;
+      padding: 0; /* full screen */
     }
     .slide {
       position: absolute;
-      inset: 24px;
+      inset: 0;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       gap: var(--gap);
       opacity: 0;
       transition: opacity 900ms ease;
+      padding: var(--gap); /* uniform spacing */
     }
     .slide.active {
       opacity: 1;
@@ -39,11 +40,11 @@
       width: 100%;
       display: flex;
       gap: var(--gap);
-      justify-content: center;
+      justify-content: space-between; /* distribute tiles evenly */
     }
 
     .tile {
-      position: relative;
+      flex: 1 1 auto;
       border-radius: 12px;
       overflow: hidden;
       background: #000;
@@ -51,7 +52,8 @@
     .tile img {
       display: block;
       width: 100%;
-      height: auto;
+      height: 100%;
+      object-fit: cover; /* fill tile while keeping aspect ratio */
     }
     .tile.reveal {
       opacity: 0;
@@ -209,8 +211,8 @@
       photos.sort((a,b) => Number(b.dateupload || 0) - Number(a.dateupload || 0));
       photos = photos.map(bestImage).filter(Boolean);
 
-      const containerWidth = stage.clientWidth - 48;
-      const containerHeight = stage.clientHeight - 48;
+      const containerWidth = stage.clientWidth;
+      const containerHeight = stage.clientHeight;
       const rows = buildJustifiedRows(photos, containerWidth, CONFIG.targetRowHeight, CONFIG.gap);
       const slidesRows = paginateRowsToSlides(rows, containerHeight, CONFIG.gap);
 
